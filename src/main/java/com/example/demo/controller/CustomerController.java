@@ -1,5 +1,6 @@
 package com.example.demo.controller;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +18,10 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.demo.dto.Apiresponse;
 import com.example.demo.dto.CustomerDTO;
 import com.example.demo.entity.Customer;
+import com.example.demo.exceptions.CustomerNotFoundException;
+import com.example.demo.exceptions.CustomerUpdateException;
+import com.example.demo.response.ErrorResponse;
+import com.example.demo.response.PutErrorResponse;
 import com.example.demo.service.CustomerService;
 
 import io.swagger.v3.oas.annotations.Hidden;
@@ -37,15 +42,26 @@ public class CustomerController {
 
 	@Operation(summary = "Getting Single customers GET ")
     @GetMapping("/{id}")
-    public ResponseEntity<CustomerDTO> getCustomerById(@PathVariable Long id) {
+    public ResponseEntity<?> getCustomerById(@PathVariable Long id) {
+		try {
         CustomerDTO customerDTO = customerService.getCustomerById(id);
         
         // If customer is not found (null), return 404 or empty response
         if (customerDTO == null) {
-            return ResponseEntity.notFound().build();
+           throw new CustomerNotFoundException("Could not find customer");
         }
 
         return ResponseEntity.ok(customerDTO);
+		}catch (CustomerNotFoundException e) {
+		    ErrorResponse errorResponse = new ErrorResponse(
+		        LocalDateTime.now(),
+		        e.getMessage(),
+		        "Customer not found"
+		    );
+		    
+		    return new ResponseEntity<>(errorResponse, HttpStatus.NOT_FOUND);
+		}
+
     }
 	
 	@Operation(summary = "Post customers GET ")
@@ -56,8 +72,32 @@ public class CustomerController {
 	
 	@Operation(summary = "Update getting ")
 	@PutMapping("/{id}")
-	public ResponseEntity<String> updateCustomerController(@PathVariable Long id, @RequestBody Customer customer){
-		return ResponseEntity.ok(customerService.updateCustomer(id, customer));
+	public ResponseEntity<?> updateCustomerController(@PathVariable Long id, @RequestBody Customer customer) {
+	    try {
+	        // Attempt to update the customer
+	        String updatedCustomer = customerService.updateCustomer(id, customer);
+
+	        // If the update fails (null or invalid), throw a custom exception
+	        if (updatedCustomer == "Could not find customer") {
+	            throw new CustomerUpdateException("Customer not found or invalid data provided.");
+	        }
+
+	        // Return a success response with a message indicating the update was successful
+	        return ResponseEntity.ok("Customer updated successfully");
+
+	    } catch (CustomerUpdateException e) {
+	        // Log the exception message for debugging (optional)
+	        System.out.println("Exception message: " + e.getMessage());
+
+	        // Create an error response with the exception details
+	        ErrorResponse errorResponse = new ErrorResponse(
+			        LocalDateTime.now(),
+			        e.getMessage(),
+			        "Bad request"
+			    );
+			    
+			    return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+	    }
 	}
 	
 	@Operation(summary = "Delete  customers ")
